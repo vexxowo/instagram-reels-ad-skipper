@@ -17,7 +17,7 @@ A userscript that detects sponsored/ad content in the Instagram Reels feed — v
 
    [![Install Userscript](https://img.shields.io/badge/Install-Userscript-success?style=for-the-badge)](https://raw.githubusercontent.com/vexxowo/instagram-reels-ad-skipper/main/instagram-reels-ad-skipper.user.js)
 
-   Your userscript manager should pick this up automatically and prompt to install. Also available on [GreasyFork](https://greasyfork.org).
+   Your userscript manager should pick this up automatically and prompt to install. Also available on [GreasyFork](https://greasyfork.org/en/scripts/584155-instagram-reels-ad-skipper).
 3. Visit `instagram.com/reels` — the script runs automatically on page load.
 
 ## How it works
