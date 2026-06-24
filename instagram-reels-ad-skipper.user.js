@@ -6,7 +6,7 @@
 // @author       vexxowo
 // @icon         https://static.cdninstagram.com/rsrc.php/y4/r/QaBlI0OZiks.ico
 // @match        https://www.instagram.com/reels/*
-// @license		 MIT
+// @license      MIT
 // @updateURL    https://raw.githubusercontent.com/vexxowo/instagram-reels-ad-skipper/main/instagram-reels-ad-skipper.user.js
 // @downloadURL  https://raw.githubusercontent.com/vexxowo/instagram-reels-ad-skipper/main/instagram-reels-ad-skipper.user.js
 // @grant        none
