@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Instagram Reels Ad Skipper
 // @namespace    https://github.com/vexxowo
-// @version      1.0.0
+// @version      1.0.1
 // @description  Detects sponsored/ad reels (video or image) in the Instagram Reels feed and instantly skips past them
 // @author       vexxowo
 // @icon         https://static.cdninstagram.com/rsrc.php/y4/r/QaBlI0OZiks.ico
@@ -62,14 +62,21 @@
       const text = el.textContent;
       if (!text || text.length > 40) continue;
       if (!textLooksLikeAd(text)) continue;
-
-      const rect = el.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) continue;
-      if (rect.bottom <= 0 || rect.top >= window.innerHeight) continue; // off-screen
-
-      return el;
+      if (isInViewport(el)) return el;
     }
     return null;
+  }
+
+  function isInViewport(el) {
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return false;
+    return rect.bottom > 0 && rect.top < window.innerHeight;
+  }
+
+  // True only while the same ad badge is still on-screen — i.e. nothing has
+  // advanced the feed yet.
+  function adStillShowing(label) {
+    return document.body.contains(label) && isInViewport(label);
   }
 
   function getScrollableAncestor(el) {
@@ -84,30 +91,70 @@
     return null;
   }
 
+  // Walk up from the label to whichever ancestor is a direct child of the
+  // scroll container — that's the reel "slide" itself, so its next sibling
+  // is the next slide in the feed.
+  function getReelSlide(label, scrollContainer) {
+    let node = label;
+    while (node && node.parentElement !== scrollContainer) {
+      node = node.parentElement;
+    }
+    return node;
+  }
+
+  // Last-resort fallback: jump straight to the next slide's exact offset.
+  // Earlier versions used `scrollTop += clientHeight`, which assumes the
+  // container's height exactly matches one slide's height — any mismatch
+  // there is what caused the player to land slightly misaligned after a
+  // skip (visible as a sliver of the next reel at the bottom of the frame).
+  // Computing the real pixel delta between the two elements avoids that.
+  function jumpToNextSlide(label) {
+    const scrollContainer = getScrollableAncestor(label);
+    if (!scrollContainer) return;
+
+    const slide = getReelSlide(label, scrollContainer);
+    const nextSlide = slide ? slide.nextElementSibling : null;
+
+    if (nextSlide) {
+      const containerTop = scrollContainer.getBoundingClientRect().top;
+      const nextTop = nextSlide.getBoundingClientRect().top;
+      scrollContainer.scrollTop += nextTop - containerTop;
+    } else {
+      scrollContainer.scrollTop += scrollContainer.clientHeight;
+    }
+  }
+
+  // Skip strategies run one at a time, each only attempted if the previous
+  // one didn't already move the feed. Running all three unconditionally
+  // (the original approach) occasionally let two of them succeed at once,
+  // whose effects stacked and left the player slightly misaligned between
+  // two reels. The rAF gaps below are sub-frame — not perceptible — but
+  // enough to check whether the ad is still on-screen before escalating.
   function skipPastAd(label) {
     const now = Date.now();
     if (now - lastSkipTime < SKIP_COOLDOWN_MS) return;
     lastSkipTime = now;
-    log('Ad detected, skipping immediately:', label.textContent);
-
-    // Every skip strategy fires in the same tick — no serial delays, no mute
-    // step (mute can't close the autoplay-to-detection gap, so it's dead
-    // weight — see changelog note below).
+    log('Ad detected, skipping:', label.textContent);
 
     // 1. Keyboard advance (Reels UI listens for ArrowDown).
     document.dispatchEvent(new KeyboardEvent('keydown', {
       key: 'ArrowDown', code: 'ArrowDown', keyCode: 40, which: 40, bubbles: true,
     }));
 
-    // 2. Explicit "Next" control, if rendered.
-    const nextBtn = document.querySelector('[aria-label="Next" i], button[aria-label*="Next" i]');
-    if (nextBtn) nextBtn.click();
+    requestAnimationFrame(() => {
+      if (!adStillShowing(label)) return; // ArrowDown already worked
 
-    // 3. Instant scroll jump (no smooth animation).
-    const scrollContainer = getScrollableAncestor(label);
-    if (scrollContainer) {
-      scrollContainer.scrollTop += scrollContainer.clientHeight;
-    }
+      // 2. Explicit "Next" control, if rendered.
+      const nextBtn = document.querySelector('[aria-label="Next" i], button[aria-label*="Next" i]');
+      if (nextBtn) nextBtn.click();
+
+      requestAnimationFrame(() => {
+        if (!adStillShowing(label)) return; // Next button already worked
+
+        // 3. Precise scroll jump, only as a last resort.
+        jumpToNextSlide(label);
+      });
+    });
   }
 
   function checkForAd() {
